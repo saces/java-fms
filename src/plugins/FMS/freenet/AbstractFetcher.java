@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import plugins.FMS.Database;
-import plugins.FMS.xml.Identity;
+import plugins.FMS.xml2.Identity;
 
 import com.db4o.ObjectContainer;
 
@@ -55,7 +55,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 	protected List<Request> pending = new ArrayList<Request>();
 	protected Map<ClientGetter, Request> running = Collections.synchronizedMap(new HashMap<ClientGetter, Request>());
 	protected final String reqTbl;
-	protected boolean terminate;
+	protected boolean terminated;
 
 	protected abstract List<Request> getPendingRequest() throws SQLException;
 
@@ -78,7 +78,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 	}
 
 	public synchronized void stop() {
-		terminate = true;
+		terminated = true;
 		for (ClientGetter getter : running.keySet()) {
 			try {
 				getter.cancel();
@@ -89,7 +89,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 	}
 
 	public void run() {
-		if (terminate)
+		if (terminated)
 			return;
 		if (!scheduled.getAndSet(false))
 			return; // scheduled is false, some other instance have ran
@@ -181,7 +181,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 
 	protected void setupRequest(Connection conn, Request req) throws SQLException {
 		Identity id = Identity.load(conn, req.iid);
-		req.publicKey = id.getPublicKey();
+		req.publicKey = id.publicKey;
 
 		PreparedStatement pstmt = conn.prepareStatement("SELECT RequestIndex, FailureCount, Loaded " //
 				+ " FROM " + reqTbl + " A INNER JOIN " //
@@ -257,22 +257,30 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 		}
 	}
 
-	public final void onFailure(FetchException e, ClientGetter state, ObjectContainer container) {
-		try {
-			Request req = running.remove(state);
-			fetchFail(req, state.getURI(), e);
-		} finally {
-			schedule(600);
-		}
+	public final void onFailure(final FetchException e, final ClientGetter state, ObjectContainer container) {
+		exec.execute(new Runnable() {
+			public void run() {
+				try {
+					Request req = running.remove(state);
+					fetchFail(req, state.getURI(), e);
+				} finally {
+					schedule(600);
+				}
+			}
+		});
 	}
 
-	public final void onSuccess(FetchResult result, ClientGetter state, ObjectContainer container) {
-		try {
-			Request req = running.remove(state);
-			fetchSuccess(req, state.getURI(), result);
-		} finally {
-			schedule(60);
-		}
+	public final void onSuccess(final FetchResult result, final ClientGetter state, ObjectContainer container) {
+		exec.execute(new Runnable() {
+			public void run() {
+				try {
+					Request req = running.remove(state);
+					fetchSuccess(req, state.getURI(), result);
+				} finally {
+					schedule(60);
+				}
+			}
+		});
 	}
 
 	private void schedule(int time) {

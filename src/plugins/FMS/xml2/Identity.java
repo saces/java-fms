@@ -1,5 +1,6 @@
-package plugins.FMS.xml;
+package plugins.FMS.xml2;
 
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -8,54 +9,70 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Types;
 
-import javax.xml.parsers.SAXParser;
-import javax.xml.parsers.SAXParserFactory;
+import com.thoughtworks.xstream.XStream;
+import com.thoughtworks.xstream.annotations.XStreamAlias;
+import com.thoughtworks.xstream.annotations.XStreamOmitField;
 
 import freenet.client.FetchResult;
 import freenet.keys.FreenetURI;
 import freenet.support.Logger;
 
-/** Identity */
+@XStreamAlias("Identity")
 public class Identity {
-	private Integer id;
-	protected final String ssk;
+	@XStreamOmitField
+	public Integer id;
+	@XStreamOmitField
+	public String publicKey;
 
-	// in XML and DB
-	private String name;
-	private boolean singleUse;
-	private boolean publishTrustList;
-	private boolean publishBoardList;
-	private Integer freesiteEdition;
-
-	// in DB only
-	protected java.sql.Date dateAdded;
-	protected java.sql.Date lastSeen;
-	protected String addedMethod;
-	protected int failureCount;
+	@XStreamAlias("Name")
+	public String name;
+	@XStreamAlias("SingleUse")
+	boolean singleUse;
+	@XStreamAlias("PublishTrustList")
+	public boolean publishTrustList;
+	@XStreamAlias("PublishBoardList")
+	boolean publishBoardList;
+	@XStreamAlias("FreesiteEdition")
+	Integer freesiteEdition;
 
 	/**
-	 * Create Identity from public key.
+	 * Create from public key.
 	 * 
 	 * @param identityId
 	 *            IdentityId, may be <code>null</code>
 	 * @param publicKey
 	 *            SSK of the public key.
-	 * @throws MalformedURLException
-	 *             if the public key is malformed.
+	 * @throws ValidationException
 	 */
-	public Identity(Integer identityId, String publicKey) throws MalformedURLException {
-		FreenetURI uri = new FreenetURI(publicKey);
+	public Identity(Integer identityId, String publicKey) throws ValidationException {
+		id = identityId;
+		this.publicKey = publicKey;
 
-		if (!uri.isSSK() && !uri.isUSK())
-			throw new MalformedURLException("Not an SSK@");
+		validate();
+	}
 
-		setId(identityId);
-		uri = uri.setKeyType("SSK").setDocName("").setMetaString(null);
-		ssk = uri.toString();
+	private Identity(FreenetURI publicKey) throws ValidationException {
+		this.publicKey = publicKey.toASCIIString();
+		validate();
+	}
+
+	private Identity() {
+	}
+
+	private void validate() throws ValidationException {
+		try {
+			FreenetURI uri = new FreenetURI(publicKey);
+
+			if (!uri.isSSK() && !uri.isUSK())
+				throw new ValidationException("Not an SSK@");
+			uri = uri.setKeyType("SSK").setDocName("").setMetaString(null);
+		} catch (MalformedURLException e) {
+			throw new ValidationException(e);
+		}
 	}
 
 	/**
-	 * Create Identity from public key.
+	 * Create from fetch result.
 	 * 
 	 * @param identityId
 	 *            IdentityId, may be <code>null</code>
@@ -63,39 +80,29 @@ public class Identity {
 	 *            SSK key of the identity.
 	 * @param fr
 	 *            Fetched result.
-	 * @throws IllegalArgumentException
-	 *             if the XML is malformed.
+	 * @return the identity
+	 * @throws ValidationException
 	 */
 	// SSK@asdfasdf.../messagebase|yyyy-mm-dd|Identity|#.xml
-	public Identity(Integer identityId, FreenetURI uri, FetchResult fr) throws IllegalArgumentException {
-		assert uri.isSSK() || !uri.isUSK();
-		setId(identityId);
-		ssk = uri.setKeyType("SSK").setDocName("").setMetaString(null).toString();
+	public static Identity fromFetchResult(Integer identityId, FreenetURI uri, FetchResult fr)
+			throws ValidationException {
+		Identity id;
 
-		SAXParserFactory factory = SAXParserFactory.newInstance();
 		try {
-			factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-			SAXParser parser = factory.newSAXParser();
-			parser.parse(fr.asBucket().getInputStream(), new IdentityXMLParser(this));
+			InputStream is = fr.asBucket().getInputStream();
+			id = fromXML(is, uri);
+			is.close();
 		} catch (Exception e) {
-			throw new IllegalArgumentException(e);
+			throw new ValidationException(e);
 		} finally {
 			fr.asBucket().free();
 		}
-	}
 
-	public Identity(ResultSet rs) throws SQLException {
-		setId(rs.getInt("IdentityID"));
-		ssk = rs.getString("PublicKey");
-		name = rs.getString("Name");
-		singleUse = rs.getBoolean("SingleUse");
-		publishTrustList = rs.getBoolean("PublishTrustList");
-		publishBoardList = rs.getBoolean("PublishBoardList");
-		freesiteEdition = (Integer) rs.getObject("FreesiteEdition");
-		dateAdded = rs.getDate("DateAdded");
-		lastSeen = rs.getDate("LastSeen");
-		addedMethod = rs.getString("AddedMethod");
-		failureCount = rs.getInt("FailureCount");
+		id.id = identityId;
+		id.publicKey = uri.toASCIIString();
+		id.validate();
+
+		return id;
 	}
 
 	public void update(Connection conn) throws SQLException {
@@ -108,7 +115,7 @@ public class Identity {
 			pstmt.setBoolean(3, publishTrustList);
 			pstmt.setBoolean(4, publishBoardList);
 			pstmt.setObject(5, freesiteEdition, Types.INTEGER);
-			pstmt.setInt(6, getId());
+			pstmt.setInt(6, id);
 			pstmt.execute();
 		} finally {
 			pstmt.close();
@@ -116,7 +123,7 @@ public class Identity {
 	}
 
 	/**
-	 * Store an new identity from database
+	 * Store to database
 	 * 
 	 * @param conn
 	 *            SQL connection
@@ -126,10 +133,10 @@ public class Identity {
 	 *            added method
 	 * @return the identity, or <code>null</code> if record not found
 	 * @throws SQLException
-	 * @throws MalformedURLException
+	 * @throws ValidationException
 	 */
 	public static Identity create(Connection conn, String publicKey, String addedMethod) throws SQLException,
-			MalformedURLException {
+			ValidationException {
 		PreparedStatement pStmt = conn.prepareStatement("INSERT INTO tblIdentity (PublicKey,AddedMethod) VALUES (?,?)",
 				Statement.RETURN_GENERATED_KEYS);
 		try {
@@ -153,7 +160,7 @@ public class Identity {
 	}
 
 	/**
-	 * Load identity from database
+	 * Load from database
 	 * 
 	 * @param conn
 	 *            SQL connection
@@ -161,6 +168,7 @@ public class Identity {
 	 *            identity id
 	 * @return the identity, or <code>null</code> if record not found
 	 * @throws SQLException
+	 * @throws ValidationException
 	 */
 	public static Identity load(Connection conn, int identityId) throws SQLException {
 		PreparedStatement pStmt = conn.prepareStatement("SELECT * FROM tblIdentity WHERE IdentityId=?");
@@ -170,7 +178,9 @@ public class Identity {
 			try {
 				if (!rs.next())
 					return null;
-				return new Identity(rs);
+				return fromResultSet(rs);
+			} catch (ValidationException e) {
+				return null;
 			} finally {
 				rs.close();
 			}
@@ -180,12 +190,12 @@ public class Identity {
 	}
 
 	/**
-	 * Load identity from database
+	 * Load from database
 	 * 
 	 * @param conn
 	 *            SQL connection
 	 * @param publicKey
-	 *            public key
+	 *            the public key
 	 * @return the identity, or <code>null</code> if record not found
 	 * @throws SQLException
 	 */
@@ -197,7 +207,9 @@ public class Identity {
 			try {
 				if (!rs.next())
 					return null;
-				return new Identity(rs);
+				return fromResultSet(rs);
+			} catch (ValidationException e) {
+				return null;
 			} finally {
 				rs.close();
 			}
@@ -206,60 +218,40 @@ public class Identity {
 		}
 	}
 
-	public String getPublicKey() {
-		return ssk;
-	}
+	private static Identity fromResultSet(ResultSet rs) throws SQLException, ValidationException {
+		Identity id = new Identity();
 
-	public void setName(String name) {
-		this.name = name;
-	}
+		id.id = rs.getInt("IdentityID");
+		id.publicKey = rs.getString("PublicKey");
+		id.name = rs.getString("Name");
+		id.singleUse = rs.getBoolean("SingleUse");
+		id.publishTrustList = rs.getBoolean("PublishTrustList");
+		id.publishBoardList = rs.getBoolean("PublishBoardList");
+		id.freesiteEdition = (Integer) rs.getObject("FreesiteEdition");
 
-	public String getName() {
-		return name;
-	}
-
-	public void setSingleUse(boolean singleUse) {
-		this.singleUse = singleUse;
-	}
-
-	public boolean isSingleUse() {
-		return singleUse;
-	}
-
-	public void setPublishTrustList(boolean publishTrustList) {
-		this.publishTrustList = publishTrustList;
-	}
-
-	public boolean isPublishTrustList() {
-		return publishTrustList;
-	}
-
-	public void setPublishBoardList(boolean publishBoardList) {
-		this.publishBoardList = publishBoardList;
-	}
-
-	public boolean isPublishBoardList() {
-		return publishBoardList;
-	}
-
-	public void setFreesiteEdition(Integer freesiteEdition) {
-		this.freesiteEdition = freesiteEdition;
-	}
-
-	public Integer getFreesiteEdition() {
-		return freesiteEdition;
-	}
-
-	@Override
-	public String toString() {
-		return "[id=" + getId() + ", name=" + name + "]";
-	}
-
-	public void setId(Integer id) {
-		this.id = id;
-	}
-
-	public Integer getId() {
+		id.validate();
 		return id;
+	}
+
+	private static final XStream xstream = new XStream(new NVDomDriver());
+	static {
+		xstream.processAnnotations(Identity.class);
+		xstream.setMode(XStream.NO_REFERENCES);
+	}
+
+	public static Identity fromXML(InputStream xml, FreenetURI uri) throws ValidationException {
+		Identity id = (Identity) xstream.fromXML(xml, new Identity(uri));
+		id.validate();
+		return id;
+	}
+
+	public static Identity fromXML(String xml, FreenetURI uri) throws ValidationException {
+		Identity id = (Identity) xstream.fromXML(xml, new Identity(uri));
+		id.validate();
+		return id;
+	}
+
+	public String toXML() {
+		return xstream.toXML(this);
 	}
 }

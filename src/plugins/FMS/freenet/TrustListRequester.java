@@ -10,13 +10,12 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import plugins.FMS.Database;
 import plugins.FMS.Util;
-import plugins.FMS.xml.Identity;
-import plugins.FMS.xml.TrustListXMLParser;
-import plugins.FMS.xml.TrustListXMLParser.TrustListCallback;
+import plugins.FMS.xml2.Identity;
+import plugins.FMS.xml2.TrustList;
+import plugins.FMS.xml2.TrustList.Trust;
 import freenet.client.FetchResult;
 import freenet.keys.FreenetURI;
 import freenet.pluginmanager.PluginRespirator;
@@ -43,72 +42,67 @@ public class TrustListRequester extends AbstractFetcher {
 							+ " (IdentityID,TargetIdentityID,MessageTrust,TrustListTrust,MessageTrustComment,TrustListTrustComment)"
 							+ " VALUES (?,?,?,?,?,?)");
 			try {
-				final AtomicInteger updateTrust = new AtomicInteger();
-				final AtomicInteger newTrust = new AtomicInteger();
-				final AtomicInteger newId = new AtomicInteger();
+				int updateTrust = 0;
+				int newTrust = 0;
+				int newId = 0;
 
-				TrustListXMLParser.parse(uri, result, new TrustListCallback() {
-					public void foundTrust(String publicKey, Integer messageTrustLevel, Integer trustListTrustLevel,
-							String messageTrustComment, String trustListTrustComment) throws Exception {
-						Savepoint trustSave = conn.setSavepoint();
-						Identity targetId = Identity.load(conn, publicKey);
-						if (targetId == null) {
-							targetId = Identity.create(conn, publicKey, "Trust List of " + id.getName());
-							newId.incrementAndGet();
-						}
-						// try to update existing
-						try {
-							pFindTrust.setInt(1, req.iid);
-							pFindTrust.setInt(2, targetId.getId());
-							ResultSet rs = pFindTrust.executeQuery();
-							try {
-								if (rs.next()) {
-									rs.updateObject(1, messageTrustLevel, Types.INTEGER);
-									rs.updateObject(2, trustListTrustLevel, Types.INTEGER);
-									rs.updateString(3, messageTrustComment);
-									rs.updateString(4, trustListTrustComment);
-									rs.updateRow();
-									updateTrust.incrementAndGet();
-
-									return;
-								}
-							} finally {
-								rs.close();
-							}
-						} catch (SQLException e) {
-							Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + messageTrustLevel
-									+ ", msgTC=" + messageTrustComment + ", tlTL=" + trustListTrustLevel + ", tlTC="
-									+ trustListTrustComment + "] : " + e, e);
-						}
-
-						// try to insert new
-						try {
-							pAddTrust.setInt(1, req.iid);
-							pAddTrust.setInt(2, targetId.getId());
-							pAddTrust.setObject(3, messageTrustLevel, Types.INTEGER);
-							pAddTrust.setObject(4, trustListTrustLevel, Types.INTEGER);
-							pAddTrust.setString(5, messageTrustComment);
-							pAddTrust.setString(6, trustListTrustComment);
-							pAddTrust.execute();
-
-							newTrust.incrementAndGet();
-							Logger.debug(this, "Trust IdentityId=" + req.iid //
-									+ ", TargetId=" + targetId //
-									+ ", trust=[msgTL=" + messageTrustLevel //
-									+ ", msgTC=" + messageTrustComment //
-									+ ", tlTL=" + trustListTrustLevel //
-									+ ", tlTC=" + trustListTrustComment //
-									+ "]");
-						} catch (SQLException e) {
-							Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + messageTrustLevel//
-									+ ", msgTC=" + messageTrustComment //
-									+ ", tlTL=" + trustListTrustLevel //
-									+ ", tlTC=" + trustListTrustComment //
-									+ "] : " + e, e);
-							conn.rollback(trustSave);
-						}
+				TrustList tl = TrustList.fromFetchResult(req.iid, uri, result);
+				for (Trust t : tl.trust) {
+					Savepoint trustSave = conn.setSavepoint();
+					Identity targetId = Identity.load(conn, t.identity);
+					if (targetId == null) {
+						targetId = Identity.create(conn, t.identity, "Trust List of " + id.name);
+						newId++;
 					}
-				});
+					// try to update existing
+					try {
+						pFindTrust.setInt(1, req.iid);
+						pFindTrust.setInt(2, targetId.id);
+						ResultSet rs = pFindTrust.executeQuery();
+						try {
+							if (rs.next()) {
+								rs.updateObject(1, t.messageTrustLevel, Types.INTEGER);
+								rs.updateObject(2, t.trustListTrustLevel, Types.INTEGER);
+								rs.updateString(3, t.messageTrustComment);
+								rs.updateString(4, t.trustListTrustComment);
+								rs.updateRow();
+								updateTrust++;
+
+								continue;
+							}
+						} finally {
+							rs.close();
+						}
+					} catch (SQLException e) {
+						Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + t.messageTrustLevel + ", msgTC="
+								+ t.messageTrustComment + ", tlTL=" + t.trustListTrustLevel + ", tlTC="
+								+ t.trustListTrustComment + "] : " + e, e);
+					}
+
+					// try to insert new
+					try {
+						pAddTrust.setInt(1, req.iid);
+						pAddTrust.setInt(2, targetId.id);
+						pAddTrust.setObject(3, t.messageTrustLevel, Types.INTEGER);
+						pAddTrust.setObject(4, t.trustListTrustLevel, Types.INTEGER);
+						pAddTrust.setString(5, t.messageTrustComment);
+						pAddTrust.setString(6, t.trustListTrustComment);
+						pAddTrust.execute();
+
+						newTrust++;
+						Logger.debug(this, "Trust IdentityId="
+								+ req.iid //
+								+ ", TargetId="
+								+ targetId //
+								+ ", trust=[msgTL=" + t.messageTrustLevel + ", msgTC=" + t.messageTrustComment
+								+ ", tlTL=" + t.trustListTrustLevel + ", tlTC=" + t.trustListTrustComment + "]");
+					} catch (SQLException e) {
+						Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + t.messageTrustLevel + ", msgTC="
+								+ t.messageTrustComment + ", tlTL=" + t.trustListTrustLevel + ", tlTC="
+								+ t.trustListTrustComment + "] : " + e, e);
+						conn.rollback(trustSave);
+					}
+				}
 				Logger.minor(this, "fetchSuccess(): Added" //
 						+ " newTrust=" + newTrust //
 						+ ", updateTrust=" + updateTrust //

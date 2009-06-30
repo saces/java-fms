@@ -11,7 +11,8 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import plugins.FMS.Database;
 import plugins.FMS.Util;
-import plugins.FMS.xml.Identity;
+import plugins.FMS.xml2.Identity;
+import plugins.FMS.xml2.ValidationException;
 import freenet.client.FetchResult;
 import freenet.keys.FreenetURI;
 import freenet.pluginmanager.PluginRespirator;
@@ -22,11 +23,12 @@ public class IdentityRequester extends AbstractFetcher {
 	}
 
 	@Override
-	protected void fetchSuccess(Connection conn, Request req, FreenetURI uri, FetchResult result) throws SQLException {
-		Identity id = new Identity(req.iid, uri, result);
+	protected void fetchSuccess(Connection conn, Request req, FreenetURI uri, FetchResult result) throws SQLException,
+			ValidationException {
+		Identity id = Identity.fromFetchResult(req.iid, uri, result);
 		id.update(conn);
 
-		if (!id.isPublishTrustList()) {
+		if (!id.publishTrustList) {
 			PreparedStatement pstmt = conn.prepareStatement("DELETE FROM tblPeerTrust WHERE IdentityId=?");
 			try {
 				pstmt.setInt(1, req.iid);

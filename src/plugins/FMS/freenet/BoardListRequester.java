@@ -8,12 +8,11 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import plugins.FMS.Database;
 import plugins.FMS.Util;
-import plugins.FMS.xml.BoardListXMLParser;
-import plugins.FMS.xml.BoardListXMLParser.BoardListCallback;
+import plugins.FMS.xml2.BoardList;
+import plugins.FMS.xml2.BoardList.Board;
 import freenet.client.FetchResult;
 import freenet.keys.FreenetURI;
 import freenet.pluginmanager.PluginRespirator;
@@ -35,34 +34,38 @@ public class BoardListRequester extends AbstractFetcher {
 			final PreparedStatement pAddBoard = conn
 					.prepareStatement("INSERT INTO tblBoard (BoardName,BoardDescription) VALUES (?,?)");
 			try {
-				final AtomicInteger addedBoard = new AtomicInteger();
-				final AtomicInteger updatedBoard = new AtomicInteger();
+				int addedBoard = 0;
+				int updatedBoard = 0;
 
-				BoardListXMLParser.parse(uri, result, new BoardListCallback() {
-					public void foundBoard(String name, String desc) throws SQLException {
-						pFindBoard.setString(1, name);
-						ResultSet rs = pFindBoard.executeQuery();
-						try {
-							if (rs.next()) {
-								Logger.minor(this, "Update Board " + name + " " + desc);
-								String oldDesc = rs.getString(2);
-								if (oldDesc == null || oldDesc.length() == 0) {
-									rs.updateString(2, desc);
-									rs.updateRow();
-									updatedBoard.incrementAndGet();
-								}
-							} else {
-								Logger.minor(this, "New Board " + name + " " + desc);
-								pAddBoard.setString(1, name);
-								pAddBoard.setString(2, desc);
-								pAddBoard.executeUpdate();
-								addedBoard.incrementAndGet();
+				BoardList boardList = BoardList.fromFetchResult(req.iid, uri, result);
+
+				for (Board b : boardList.board) {
+					final String name = b.name;
+					final String desc = b.description;
+
+					pFindBoard.setString(1, name);
+					ResultSet rs = pFindBoard.executeQuery();
+					try {
+						if (rs.next()) {
+							Logger.minor(this, "Update Board " + name + " " + desc);
+							String oldDesc = rs.getString(2);
+							if (oldDesc == null || oldDesc.length() == 0) {
+								rs.updateString(2, desc);
+								rs.updateRow();
+								updatedBoard++;
 							}
-						} finally {
-							rs.close();
+						} else {
+							Logger.minor(this, "New Board " + name + " " + desc);
+							pAddBoard.setString(1, name);
+							pAddBoard.setString(2, desc);
+							pAddBoard.executeUpdate();
+							addedBoard++;
 						}
+					} finally {
+						rs.close();
 					}
-				});
+				}
+
 				Logger.minor(this, "Total " + addedBoard + " new boards, and " + updatedBoard + " updated");
 			} finally {
 				pAddBoard.close();

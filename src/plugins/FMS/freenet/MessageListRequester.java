@@ -13,9 +13,9 @@ import java.util.concurrent.ScheduledExecutorService;
 
 import plugins.FMS.Database;
 import plugins.FMS.Util;
-import plugins.FMS.xml.Identity;
 import plugins.FMS.xml.MessageListXMLParser;
 import plugins.FMS.xml.MessageListXMLParser.MessageListCallback;
+import plugins.FMS.xml2.Identity;
 import freenet.client.FetchResult;
 import freenet.keys.FreenetURI;
 import freenet.pluginmanager.PluginRespirator;
@@ -71,7 +71,7 @@ public class MessageListRequester extends AbstractFetcher {
 					Identity postId = Identity.load(conn, ssk);
 					if (postId == null)
 						return;
-					int id = postId.getId();
+					int id = postId.id;
 
 					// FIXME check the board list, date, etc
 

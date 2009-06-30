@@ -9,7 +9,7 @@
 	<property name="dist" location="dist/"/>
 	<property name="tmp" location="tmp/"/>
 	<property name="derby-jar" location="lib/derby.jar"/>
-
+	<property name="xstream-jar" location="lib/xstream.jar"/>
 
 	<!-- ================================================== -->
 	<property name="apache.mirror" value="http://archive.apache.org/" />
@@ -41,6 +41,29 @@
 	</target>
 
 	<!-- ================================================== -->
+	<property name="xstream.mirror" value="http://repository.codehaus.org/com/thoughtworks/xstream/xstream/1.3.1/xstream-1.3.1.jar" />
+	<property name="xstream.md5" value="4dfebec402e7606b2c1f66dec1773e8f" />
+	<property name="xstream.sha" value="c23741bfc42efa760c6acdb90a131814c70aeb8d" />
+
+	<available property="xstream.exist" file="${xstream-jar}" />
+	<target name="xstream-get" unless="xstream.exist" depends="mkdir">
+		<get verbose="true" src="${xstream.mirror}" dest="${tmp}/xstream.jar" />
+		<checksum file="${tmp}/xstream.jar" algorithm="MD5" property="${xstream.md5}" verifyProperty="xstreamMD5ok" />
+		<checksum file="${tmp}/xstream.jar" algorithm="SHA" property="${xstream.sha}" verifyProperty="xstreamSHAok" />
+
+		<fail message="xstream.jar checksum mismatch">
+			<condition>
+				<or>
+					<equals arg1="${xstreamMD5ok}" arg2="false" />
+					<equals arg1="${xstreamSHAok}" arg2="false" />
+				</or>
+			</condition>
+		</fail>
+
+		<copy file="${tmp}/xstream.jar" tofile="lib/xstream.jar" />
+	</target>
+
+	<!-- ================================================== -->
 	<target name="mkdir">
 		<mkdir dir="${build}"/>
 		<mkdir dir="${dist}"/>
@@ -49,13 +72,14 @@
 	</target>
 
 	<!-- ================================================== -->
-	<target name="compile" depends="mkdir,derby-get" >
+	<target name="compile" depends="mkdir,derby-get,xstream-get" >
 		<tstamp/>
 		<javac srcdir="src/" destdir="${build}" debug="${debug}" source="${source-version}">
 			<classpath>
 				<pathelement location="${freenet-ext.location}"/>
 				<pathelement location="${freenet-cvs-snapshot.location}"/>
 				<pathelement location="${derby-jar}" />
+				<pathelement location="${xstream-jar}" />
 			</classpath>
 			<include name="**/*.java"/>
 		</javac>
@@ -75,8 +99,9 @@
 			</and>
 		</condition>
 
-		<!-- Extract Derby -->
+		<!-- Extract Libraries -->
 		<unzip src="${derby-jar}" dest="${build}/" />
+		<unzip src="${xstream-jar}" dest="${build}/" />
 
 		<!-- JAR -->
 		<jar jarfile="${dist}/FMS.jar" duplicate="fail">
