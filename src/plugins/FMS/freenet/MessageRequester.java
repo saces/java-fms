@@ -7,9 +7,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 
 import plugins.FMS.Database;
@@ -41,6 +43,7 @@ public class MessageRequester extends AbstractFetcher {
 			return;
 		}
 
+		int messageId;
 		PreparedStatement pstmt = conn.prepareStatement("INSERT INTO tblMessage "
 				+ " (UUID,IdentityID,ReplyBoard,PostTime,Subject,Body)" // 
 				+ " VALUES (?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS);
@@ -52,6 +55,27 @@ public class MessageRequester extends AbstractFetcher {
 			pstmt.setString(5, msg.subject);
 			pstmt.setString(6, msg.body);
 			pstmt.executeUpdate();
+			ResultSet rs = pstmt.getGeneratedKeys();
+			try {
+				rs.next();
+				messageId = rs.getInt(1);
+			} finally {
+				rs.close();
+			}
+		} finally {
+			pstmt.close();
+		}
+
+		pstmt = conn
+				.prepareStatement("INSERT INTO tblMessageParent (MessageID,ParentOrder,ParentUUID,ParentMessageID) VALUES (?,?,?,?)");
+		try {
+			for (Map.Entry<Integer, String> u : msg.parentPost.entrySet()) {
+				pstmt.setInt(1, messageId);
+				pstmt.setInt(2, u.getKey());
+				pstmt.setString(3, u.getValue());
+				pstmt.setObject(1, SQLUtil.findMessageByUUID(conn, u.getValue()), Types.INTEGER);
+				pstmt.execute();
+			}
 		} finally {
 			pstmt.close();
 		}

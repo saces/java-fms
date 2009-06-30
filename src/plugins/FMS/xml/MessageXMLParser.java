@@ -103,6 +103,8 @@ public class MessageXMLParser extends DefaultHandler {
 					content = content.substring(0, 120);
 				msg.subject = content;
 			} else if ("MessageID".equals(tag) && inReplyTo == 0) {
+				if (content.length() > 90)
+					content = content.substring(0, 90);
 				msg.uuid = content;
 			} else if ("Board".equals(tag) && "Boards".equals(lastTag.getLast())) {
 				content = content.toLowerCase(Locale.US);
@@ -119,6 +121,8 @@ public class MessageXMLParser extends DefaultHandler {
 			} else if ("Order".equals(tag) && inReplyTo > 0) {
 				parentOrder = Integer.parseInt(content);
 			} else if ("MessageID".equals(tag) && inReplyTo > 0) {
+				if (content.length() > 90)
+					content = content.substring(0, 90);
 				parentId = content;
 			} else if ("Message".equals(tag) && inReplyTo > 0) {
 				msg.parentPost.put(parentOrder, parentId);

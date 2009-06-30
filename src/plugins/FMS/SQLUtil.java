@@ -35,4 +35,33 @@ public class SQLUtil {
 			pFindBoard.close();
 		}
 	}
+
+	/**
+	 * Find a message by UUID
+	 * 
+	 * @param conn
+	 *            SQL Connection
+	 * @param uuid
+	 *            message uuid
+	 * @return messageID if found; <code>null</code> otherwise.
+	 * @throws SQLException
+	 */
+	public static Integer findMessageByUUID(Connection conn, String uuid) throws SQLException {
+		final PreparedStatement pFindBoard = conn.prepareStatement("SELECT MessageID FROM tblMessage WHERE UUID=?");
+		try {
+			pFindBoard.setString(1, uuid);
+			ResultSet rs = pFindBoard.executeQuery();
+			try {
+				if (rs.next()) {
+					return rs.getInt("MessageID");
+				} else {
+					return null;
+				}
+			} finally {
+				rs.close();
+			}
+		} finally {
+			pFindBoard.close();
+		}
+	}
 }
