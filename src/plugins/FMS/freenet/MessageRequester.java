@@ -41,7 +41,7 @@ public class MessageRequester extends AbstractFetcher {
 				+ " (UUID,IdentityID,ReplyBoard,PostTime,Subject,Body)" // 
 				+ " VALUES (?,?,?,?,?,?)", Statement.RETURN_GENERATED_KEYS);
 		try {
-			pstmt.setString(1, msg.messageId);
+			pstmt.setString(1, msg.messageUUID);
 			pstmt.setInt(2, req.iid);
 			pstmt.setInt(3, SQLUtil.findOrCreateBoard(conn, msg.replyBoard));
 			pstmt.setTimestamp(4, new Timestamp(msg.date.getTime() + msg.time.getTime()));
@@ -59,18 +59,30 @@ public class MessageRequester extends AbstractFetcher {
 			pstmt.close();
 		}
 
-		pstmt = conn
-				.prepareStatement("INSERT INTO tblMessageParent (MessageID,ParentOrder,ParentUUID,ParentMessageID) VALUES (?,?,?,?)");
-		try {
-			for (ParentMessage u : msg.inReplyTo) {
-				pstmt.setInt(1, messageId);
-				pstmt.setInt(2, u.order);
-				pstmt.setString(3, u.messageId);
-				pstmt.setObject(4, SQLUtil.findMessageByUUID(conn, u.messageId), Types.INTEGER);
-				pstmt.execute();
+		if (msg.inReplyTo != null) {
+			PreparedStatement pstmtP = conn
+					.prepareStatement("INSERT INTO tblMessageParent (MessageID,ParentOrder,ParentUUID,ParentMessageID) VALUES (?,?,?,?)");
+			try {
+				for (ParentMessage u : msg.inReplyTo) {
+					pstmtP.setInt(1, messageId);
+					pstmtP.setInt(2, u.order);
+					pstmtP.setString(3, u.messageUUID);
+					pstmtP.setObject(4, SQLUtil.findMessageByUUID(conn, u.messageUUID), Types.INTEGER);
+					pstmtP.execute();
+				}
+			} finally {
+				pstmtP.close();
 			}
+		}
+
+		PreparedStatement pstmtU = conn
+				.prepareStatement("UPDATE tblMessageParent SET ParentMessageID=? WHERE ParentUUID=?");
+		try {
+			pstmtU.setInt(1, messageId);
+			pstmtU.setString(2, msg.messageUUID);
+			pstmtU.executeUpdate();
 		} finally {
-			pstmt.close();
+			pstmtU.close();
 		}
 
 		System.out.println(new Date(msg.date.getTime() + msg.time.getTime()));
@@ -85,7 +97,7 @@ public class MessageRequester extends AbstractFetcher {
 		try {
 			PreparedStatement pstmt = conn.prepareStatement( //
 					"SELECT IdentityID, Day, RequestIndex FROM tblMessageRequests"
-							+ " WHERE Loaded <> 1 ORDER BY Day DESC, FailureCount");
+							+ " WHERE Loaded <> 1 ORDER BY FailureCount, Day DESC");
 			try {
 				ResultSet rs = pstmt.executeQuery();
 				try {

@@ -48,7 +48,7 @@ public class NVDomDriver extends AbstractXmlDriver {
      * Construct a DomDriver.
      */
     public NVDomDriver() {
-        this(null);
+		this("UTF-8");
     }
 
     /**
@@ -65,8 +65,12 @@ public class NVDomDriver extends AbstractXmlDriver {
     public NVDomDriver(String encoding, XmlFriendlyReplacer replacer) {
         super(replacer);
         documentBuilderFactory = DocumentBuilderFactory.newInstance();
-		documentBuilderFactory.setAttribute("http://apache.org/xml/features/disallow-doctype-decl", true);
-		documentBuilderFactory.setAttribute("http://javax.xml.XMLConstants/feature/secure-processing", true);
+		try {
+			documentBuilderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+			documentBuilderFactory.setFeature("http://javax.xml.XMLConstants/feature/secure-processing", true);
+		} catch (ParserConfigurationException e) {
+			// impossible
+		}
 		documentBuilderFactory.setValidating(false);
         this.encoding = encoding;
     }

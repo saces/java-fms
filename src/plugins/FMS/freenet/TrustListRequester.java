@@ -6,6 +6,7 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Savepoint;
+import java.sql.Statement;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
@@ -27,91 +28,100 @@ public class TrustListRequester extends AbstractFetcher {
 	}
 
 	@Override
-	protected void fetchSuccess(final Connection conn, final Request req, FreenetURI uri, FetchResult result)
+	protected void fetchSuccess(Connection conn, Request req, FreenetURI uri, FetchResult result)
 			throws Exception {
-		final Identity id = Identity.load(conn, req.iid);
-		Logger.minor(this, "Got TrustList from " + id + ", uri=" + uri);
+		Logger.minor(this, "Got TrustList from " + req.iid + ", uri=" + uri);
 
-		final PreparedStatement pFindTrust = conn.prepareStatement(
-				"SELECT MessageTrust,TrustListTrust,MessageTrustComment,TrustListTrustComment"
-						+ " FROM tblPeerTrust WHERE IdentityID=? AND TargetIdentityID=? FOR UPDATE",
-				ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE);
+		Statement stmt = conn.createStatement();
 		try {
-			final PreparedStatement pAddTrust = conn
-					.prepareStatement("INSERT INTO tblPeerTrust"
-							+ " (IdentityID,TargetIdentityID,MessageTrust,TrustListTrust,MessageTrustComment,TrustListTrustComment)"
-							+ " VALUES (?,?,?,?,?,?)");
+			stmt.execute("LOCK TABLE tblIdentity IN EXCLUSIVE MODE");
+			stmt.execute("LOCK TABLE tblPeerTrust IN EXCLUSIVE MODE");
+
+			Identity id = Identity.load(conn, req.iid);
+
+			PreparedStatement pFindTrust = conn.prepareStatement(
+					"SELECT MessageTrust,TrustListTrust,MessageTrustComment,TrustListTrustComment"
+							+ " FROM tblPeerTrust WHERE IdentityID=? AND TargetIdentityID=? FOR UPDATE",
+					ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_UPDATABLE);
 			try {
-				int updateTrust = 0;
-				int newTrust = 0;
-				int newId = 0;
+				PreparedStatement pAddTrust = conn
+						.prepareStatement("INSERT INTO tblPeerTrust"
+								+ " (IdentityID,TargetIdentityID,MessageTrust,TrustListTrust,MessageTrustComment,TrustListTrustComment)"
+								+ " VALUES (?,?,?,?,?,?)");
+				try {
+					int updateTrust = 0;
+					int newTrust = 0;
+					int newId = 0;
 
-				TrustList tl = TrustList.fromFetchResult(req.iid, uri, result);
-				for (Trust t : tl.trust) {
-					Savepoint trustSave = conn.setSavepoint();
-					Identity targetId = Identity.load(conn, t.identity);
-					if (targetId == null) {
-						targetId = Identity.create(conn, t.identity, "Trust List of " + id.name);
-						newId++;
-					}
-					// try to update existing
-					try {
-						pFindTrust.setInt(1, req.iid);
-						pFindTrust.setInt(2, targetId.id);
-						ResultSet rs = pFindTrust.executeQuery();
-						try {
-							if (rs.next()) {
-								rs.updateObject(1, t.messageTrustLevel, Types.INTEGER);
-								rs.updateObject(2, t.trustListTrustLevel, Types.INTEGER);
-								rs.updateString(3, t.messageTrustComment);
-								rs.updateString(4, t.trustListTrustComment);
-								rs.updateRow();
-								updateTrust++;
-
-								continue;
-							}
-						} finally {
-							rs.close();
+					TrustList tl = TrustList.fromFetchResult(req.iid, uri, result);
+					for (Trust t : tl.trust) {
+						Savepoint trustSave = conn.setSavepoint();
+						Identity targetId = Identity.load(conn, t.identity);
+						if (targetId == null) {
+							targetId = Identity.create(conn, t.identity, "Trust List of " + id.name);
+							newId++;
 						}
-					} catch (SQLException e) {
-						Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + t.messageTrustLevel + ", msgTC="
-								+ t.messageTrustComment + ", tlTL=" + t.trustListTrustLevel + ", tlTC="
-								+ t.trustListTrustComment + "] : " + e, e);
-					}
+						// try to update existing
+						try {
+							pFindTrust.setInt(1, req.iid);
+							pFindTrust.setInt(2, targetId.id);
+							ResultSet rs = pFindTrust.executeQuery();
+							try {
+								if (rs.next()) {
+									rs.updateObject(1, t.messageTrustLevel, Types.INTEGER);
+									rs.updateObject(2, t.trustListTrustLevel, Types.INTEGER);
+									rs.updateString(3, t.messageTrustComment);
+									rs.updateString(4, t.trustListTrustComment);
+									rs.updateRow();
+									updateTrust++;
 
-					// try to insert new
-					try {
-						pAddTrust.setInt(1, req.iid);
-						pAddTrust.setInt(2, targetId.id);
-						pAddTrust.setObject(3, t.messageTrustLevel, Types.INTEGER);
-						pAddTrust.setObject(4, t.trustListTrustLevel, Types.INTEGER);
-						pAddTrust.setString(5, t.messageTrustComment);
-						pAddTrust.setString(6, t.trustListTrustComment);
-						pAddTrust.execute();
+									continue;
+								}
+							} finally {
+								rs.close();
+							}
+						} catch (SQLException e) {
+							Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + t.messageTrustLevel
+									+ ", msgTC=" + t.messageTrustComment + ", tlTL=" + t.trustListTrustLevel
+									+ ", tlTC=" + t.trustListTrustComment + "] : " + e, e);
+						}
 
-						newTrust++;
-						Logger.debug(this, "Trust IdentityId="
-								+ req.iid //
-								+ ", TargetId="
-								+ targetId //
-								+ ", trust=[msgTL=" + t.messageTrustLevel + ", msgTC=" + t.messageTrustComment
-								+ ", tlTL=" + t.trustListTrustLevel + ", tlTC=" + t.trustListTrustComment + "]");
-					} catch (SQLException e) {
-						Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + t.messageTrustLevel + ", msgTC="
-								+ t.messageTrustComment + ", tlTL=" + t.trustListTrustLevel + ", tlTC="
-								+ t.trustListTrustComment + "] : " + e, e);
-						conn.rollback(trustSave);
+						// try to insert new
+						try {
+							pAddTrust.setInt(1, req.iid);
+							pAddTrust.setInt(2, targetId.id);
+							pAddTrust.setObject(3, t.messageTrustLevel, Types.INTEGER);
+							pAddTrust.setObject(4, t.trustListTrustLevel, Types.INTEGER);
+							pAddTrust.setString(5, t.messageTrustComment);
+							pAddTrust.setString(6, t.trustListTrustComment);
+							pAddTrust.execute();
+
+							newTrust++;
+							Logger.debug(this, "Trust IdentityId="
+									+ req.iid //
+									+ ", TargetId="
+									+ targetId //
+									+ ", trust=[msgTL=" + t.messageTrustLevel + ", msgTC=" + t.messageTrustComment
+									+ ", tlTL=" + t.trustListTrustLevel + ", tlTC=" + t.trustListTrustComment + "]");
+						} catch (SQLException e) {
+							Logger.normal(this, "fetchSuccess(): SQLException: [msgTL=" + t.messageTrustLevel
+									+ ", msgTC=" + t.messageTrustComment + ", tlTL=" + t.trustListTrustLevel
+									+ ", tlTC=" + t.trustListTrustComment + "] : " + e, e);
+							conn.rollback(trustSave);
+						}
 					}
+					Logger.minor(this, "fetchSuccess(): Added" //
+							+ " newTrust=" + newTrust //
+							+ ", updateTrust=" + updateTrust //
+							+ ", newId=" + newId);
+				} finally {
+					pAddTrust.close();
 				}
-				Logger.minor(this, "fetchSuccess(): Added" //
-						+ " newTrust=" + newTrust //
-						+ ", updateTrust=" + updateTrust //
-						+ ", newId=" + newId);
 			} finally {
-				pAddTrust.close();
+				pFindTrust.close();
 			}
 		} finally {
-			pFindTrust.close();
+			stmt.close();
 		}
 	}
 

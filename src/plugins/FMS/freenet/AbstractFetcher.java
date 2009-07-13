@@ -96,6 +96,8 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 		if (running.size() >= getMaxRequests())
 			return;
 
+		Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
+
 		if (pending.isEmpty()) {
 			try {
 				Logger.debug(this, "run(): re-populate list");
@@ -261,6 +263,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 		exec.execute(new Runnable() {
 			public void run() {
 				try {
+					Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
 					Request req = running.remove(state);
 					fetchFail(req, state.getURI(), e);
 				} finally {
@@ -274,6 +277,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 		exec.execute(new Runnable() {
 			public void run() {
 				try {
+					Thread.currentThread().setContextClassLoader(getClass().getClassLoader());
 					Request req = running.remove(state);
 					fetchSuccess(req, state.getURI(), result);
 				} finally {

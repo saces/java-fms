@@ -168,7 +168,6 @@ public class Identity {
 	 *            identity id
 	 * @return the identity, or <code>null</code> if record not found
 	 * @throws SQLException
-	 * @throws ValidationException
 	 */
 	public static Identity load(Connection conn, int identityId) throws SQLException {
 		PreparedStatement pStmt = conn.prepareStatement("SELECT * FROM tblIdentity WHERE IdentityId=?");
@@ -180,6 +179,7 @@ public class Identity {
 					return null;
 				return fromResultSet(rs);
 			} catch (ValidationException e) {
+				Logger.error(Identity.class, "INVALID ID IN DB: id=" + identityId + " : " + e);
 				return null;
 			} finally {
 				rs.close();
@@ -209,6 +209,8 @@ public class Identity {
 					return null;
 				return fromResultSet(rs);
 			} catch (ValidationException e) {
+				Logger.error(Identity.class, "IMPOSSIBLE ERROR: " + e, e);
+				assert false; // impossible
 				return null;
 			} finally {
 				rs.close();

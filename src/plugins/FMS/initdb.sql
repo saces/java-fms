@@ -65,11 +65,10 @@ CREATE TABLE tblMessageParent (
 	ParentMessageID		INTEGER,
 	PRIMARY KEY (MessageID,ParentOrder),
 	CONSTRAINT xtblMessageParentID FOREIGN KEY(MessageID) REFERENCES tblMessage(MessageID),
-	CONSTRAINT xtblMessageParentParentID FOREIGN KEY(ParentMessageID) REFERENCES tblMessage(MessageID)
+	CONSTRAINT xtblMessageParentParentID FOREIGN KEY(MessageID) REFERENCES tblMessage(MessageID)
 );
 
 CREATE INDEX idxMessageParentParentUUID ON tblMessageParent(ParentUUID);
-
 CREATE INDEX idxMessageParentParentMessageID ON tblMessageParent(ParentMessageID);
 
 CREATE TABLE tblMessageBoards (

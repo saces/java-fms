@@ -6,6 +6,7 @@ import java.util.TimeZone;
 
 public class Util {
 	public static final String msgBase = "fms";
+	public static final int MaxMessageListRequests = 10;
 	public static int MaxIdentityRequests = 5;
 
 	public static Date getSQLTimeOffset(int field, int amount) {

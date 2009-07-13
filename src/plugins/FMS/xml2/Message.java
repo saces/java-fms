@@ -9,9 +9,6 @@ import com.thoughtworks.xstream.XStream;
 import com.thoughtworks.xstream.annotations.XStreamAlias;
 import com.thoughtworks.xstream.annotations.XStreamConverter;
 import com.thoughtworks.xstream.annotations.XStreamOmitField;
-import com.thoughtworks.xstream.converters.collections.CollectionConverter;
-import com.thoughtworks.xstream.mapper.Mapper;
-import com.thoughtworks.xstream.mapper.MapperWrapper;
 
 import freenet.client.FetchResult;
 import freenet.keys.FreenetURI;
@@ -20,37 +17,16 @@ import freenet.support.Logger;
 
 @XStreamAlias("Message")
 public class Message {
-	public static class BoardsConverter extends CollectionConverter {
-		public BoardsConverter(Mapper mapper) {
-			super(new MapperWrapper(mapper) {
-				@Override
-				@SuppressWarnings("unchecked")
-				public String serializedClass(Class type) {
-					if (String.class.equals(type))
-						return "Board";
-					return super.serializedClass(type);
-				}
-
-				@Override
-				public Class<?> realClass(String elementName) {
-					if ("Board".equals(elementName))
-						return String.class;
-					return super.realClass(elementName);
-				}
-			});
-		}
-	}
-
 	@XStreamAlias("Message")
 	public static class ParentMessage {
 		@XStreamAlias("Order")
 		public int order;
 		@XStreamAlias("MessageID")
-		public String messageId;
+		public String messageUUID;
 
 		ParentMessage(int order, String messageId) {
 			this.order = order;
-			this.messageId = messageId;
+			this.messageUUID = messageId;
 		}
 	}
 
@@ -75,7 +51,7 @@ public class Message {
 	@XStreamAlias("Subject")
 	public String subject;
 	@XStreamAlias("MessageID")
-	public String messageId;
+	public String messageUUID;
 
 	@XStreamAlias("Boards")
 	@XStreamConverter(BoardsConverter.class)
@@ -86,15 +62,19 @@ public class Message {
 
 	@XStreamAlias("InReplyTo")
 	public List<ParentMessage> inReplyTo;
-	
+
 	@XStreamAlias("Body")
 	public String body;
-	
+
 	@XStreamAlias("Attachments")
 	public List<Attachment> attachments;
 
 	@XStreamOmitField
 	public FreenetURI uri;
+
+	private Message(FreenetURI uri) {
+		this.uri = uri;
+	}
 
 	/**
 	 * Create from fetch result.
@@ -115,7 +95,7 @@ public class Message {
 
 		try {
 			InputStream is = fr.asBucket().getInputStream();
-			msg = fromXML(is);
+			msg = fromXML(is, uri);
 			is.close();
 		} catch (Exception e) {
 			throw new ValidationException(e);
@@ -129,7 +109,16 @@ public class Message {
 		return msg;
 	}
 
-	private void validate() {
+	private void validate() throws ValidationException {
+		if (replyBoard == null)
+			throw new ValidationException("replyBoard is null");
+		if (boards == null)
+			throw new ValidationException("boards is null");
+		if (subject == null)
+			throw new ValidationException("subject is null");
+		if (body == null)
+			throw new ValidationException("body is null");
+
 		if (subject.length() > 120)
 			subject = subject.substring(0, 120);
 
@@ -142,13 +131,13 @@ public class Message {
 			String board = it.next();
 			board = board.toLowerCase(Locale.US);
 			if (board.length() > 60)
-				board = replyBoard.substring(0, 60);
+				board = board.substring(0, 60);
 			it.set(board);
 		}
 
 		String routingKey = "@" + Base64.encode(uri.getRoutingKey()).replaceAll("[~\\-]", "");
-		if (!messageId.endsWith(routingKey)) {
-			Logger.normal(this, "Invalid UUID suffix expected=" + routingKey + ", uuid=" + messageId + ", uri=" + uri);
+		if (!messageUUID.endsWith(routingKey)) {
+			Logger.normal(this, "Invalid UUID suffix expected=" + routingKey + ", uuid=" + messageUUID + ", uri=" + uri);
 			return;
 		}
 	}
@@ -161,14 +150,14 @@ public class Message {
 		xstream.setMode(XStream.NO_REFERENCES);
 	}
 
-	public static Message fromXML(InputStream xml) {
-		Message m = (Message) xstream.fromXML(xml, new Message());
+	public static Message fromXML(InputStream xml, FreenetURI uri) throws ValidationException {
+		Message m = (Message) xstream.fromXML(xml, new Message(uri));
 		m.validate();
 		return m;
 	}
 
-	public static Message fromXML(String xml) {
-		Message m = (Message) xstream.fromXML(xml, new Message());
+	public static Message fromXML(String xml, FreenetURI uri) throws ValidationException {
+		Message m = (Message) xstream.fromXML(xml, new Message(uri));
 		m.validate();
 		return m;
 	}

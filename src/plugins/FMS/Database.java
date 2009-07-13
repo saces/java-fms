@@ -1,6 +1,6 @@
 package plugins.FMS;
 
-import static java.sql.Connection.TRANSACTION_READ_COMMITTED;
+import static java.sql.Connection.TRANSACTION_SERIALIZABLE;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -45,7 +45,7 @@ public class Database {
 			}
 		}
 
-		conn.setTransactionIsolation(TRANSACTION_READ_COMMITTED);
+		conn.setTransactionIsolation(TRANSACTION_SERIALIZABLE);
 		return conn;
 	}
 

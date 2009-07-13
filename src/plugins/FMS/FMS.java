@@ -48,7 +48,7 @@ public class FMS implements FredPlugin, FredPluginHTTP, FredPluginThreadless, Fr
 
 	public void runPlugin(PluginRespirator pr) {
 		node = pr.getNode();
-		executor = new ScheduledThreadPoolExecutor(2, new FMSThreadFactory());
+		executor = new ScheduledThreadPoolExecutor(4, new FMSThreadFactory());
 
 		identityRequester = new IdentityRequester(pr, executor);
 		unknownIdentityRequester = new UnknownIdentityRequester(pr, executor);
