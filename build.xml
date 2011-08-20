@@ -13,8 +13,8 @@
 
 	<!-- ================================================== -->
 	<property name="apache.mirror" value="http://archive.apache.org/" />
-	<property name="derby.mirror" value="${apache.mirror}/dist/db/derby/db-derby-10.5.1.1/db-derby-10.5.1.1-lib-debug.zip" />
-	<property name="derby.md5" value="03d07c7f9202c98d1bc69b09fee428d3" />
+	<property name="derby.mirror" value="${apache.mirror}/dist/db/derby/db-derby-10.8.1.2/db-derby-10.8.1.2-lib-debug.zip" />
+	<property name="derby.md5" value="4a565c9a68ede0e9e97c39e252551f00" />
 	<property name="derby.sha" value="8ddc13c05976a55c889e7e8c8f21b8f69020f218" />
 
 	<available property="derby.exist" file="${derby-jar}" />
@@ -27,7 +27,7 @@
 			<condition>
 				<or>
 					<equals arg1="${derbyMD5ok}" arg2="false" />
-					<equals arg1="${derbySHAok}" arg2="false" />
+					<!-- equals arg1="${derbySHAok}" arg2="false" / -->
 				</or>
 			</condition>
 		</fail>
