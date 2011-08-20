@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <project name="FelineMurineSynergy" default="dist" basedir=".">
-	<property name="freenet-cvs-snapshot.location" location="../fred/lib/freenet-cvs-snapshot.jar"/>
+	<property name="freenet-cvs-snapshot.location" location="../fred/dist/freenet.jar"/>
 	<property name="freenet-ext.location" location="../fred/lib/freenet-ext.jar"/>
 	<property name="svn.revision" value="@custom@"/>
 	<property name="source-version" value="1.5"/>
@@ -35,6 +35,7 @@
 		<unzip src="${tmp}/derby.zip" dest="lib/">
 			<patternset>
 				<include name="**/derby.jar"/>
+				<include name="**/derbyrun.jar"/>
 			</patternset>
 			<mapper type="flatten"/>
 		</unzip>
@@ -100,8 +101,9 @@
 		</condition>
 
 		<!-- Extract Libraries -->
-		<unzip src="${derby-jar}" dest="${build}/" />
-		<unzip src="${xstream-jar}" dest="${build}/" />
+		<!-- unzip src="${derby-jar}" dest="${build}/" />
+		<unzip src="lib/derbyrun.jar" dest="${build}/" />
+		<unzip src="${xstream-jar}" dest="${build}/" / -->
 
 		<!-- JAR -->
 		<jar jarfile="${dist}/FMS.jar" duplicate="fail">
