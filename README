@@ -1,0 +1,14 @@
+This project is forked from here: http://gitorious.org/java-fms
+
+Build it by just typing 'ant'
+
+Prepare the node:
+ create a dir, for example <node-dir>/fms-libs
+ add it to the java path in wrapper.conf: wrapper.java.classpath.3=fms-libs/*.jar
+
+copy from <projectdir>/lib to the dir created in the step above:
+ derby.jar, derbyrun.jar, xstream.jar
+
+restart the node.
+
+Load the plugin. Have fun.
