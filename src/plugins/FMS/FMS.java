@@ -129,7 +129,7 @@ public class FMS implements FredPlugin, FredPluginHTTP, FredPluginThreadless, Fr
 											int y;
 											while ((y = cs.read()) != -1)
 												sw.write(y);
-											tableRow.addChild("td", sw.toString());
+											tableRow.addChild("td").addChild("pre", sw.toString());
 										} else {
 											tableRow.addChild("td", v.toString());
 										}
