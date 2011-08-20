@@ -31,6 +31,7 @@ import freenet.pluginmanager.PluginRespirator;
 import freenet.support.Logger;
 
 public abstract class AbstractFetcher implements ClientGetCallback, RequestClient, Runnable {
+
 	protected static class Request {
 		protected String publicKey;
 		final protected int iid;
@@ -56,6 +57,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 	protected Map<ClientGetter, Request> running = Collections.synchronizedMap(new HashMap<ClientGetter, Request>());
 	protected final String reqTbl;
 	protected boolean terminated;
+	protected final PluginRespirator _pr;
 
 	protected abstract List<Request> getPendingRequest() throws SQLException;
 
@@ -71,6 +73,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 		ctx = hlsc.getFetchContext().clone();
 		reqTbl = requestTable;
 		exec = executor;
+		_pr = pr;
 	}
 
 	public void start() {
@@ -81,7 +84,7 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 		terminated = true;
 		for (ClientGetter getter : running.keySet()) {
 			try {
-				getter.cancel();
+				getter.cancel(null, _pr.getNode().clientCore.clientContext);
 			} catch (Exception e) {
 				Logger.error(this, "Error canceling request: " + e, e);
 			}
@@ -302,5 +305,9 @@ public abstract class AbstractFetcher implements ClientGetCallback, RequestClien
 
 	public final void removeFrom(ObjectContainer container) {
 		// no-op
+	}
+
+	public boolean realTimeFlag() {
+		return true;
 	}
 }
