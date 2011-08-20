@@ -1,5 +1,9 @@
 package plugins.FMS;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringWriter;
+import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -117,13 +121,26 @@ public class FMS implements FredPlugin, FredPluginHTTP, FredPluginThreadless, Fr
 								HTMLNode tableRow = tableNode.addChild("tr");
 								for (int i = 1; i <= cc; i++) {
 									Object v = rs.getObject(i);
-									if (v != null)
-										tableRow.addChild("td", v.toString());
-									else
+									if (v != null) {
+										if (v instanceof Clob) {
+											Clob c = (Clob) v;
+											Reader cs = c.getCharacterStream();
+											StringWriter sw = new StringWriter();
+											int y;
+											while ((y = cs.read()) != -1)
+												sw.write(y);
+											tableRow.addChild("td", sw.toString());
+										} else {
+											tableRow.addChild("td", v.toString());
+										}
+									} else
 										tableRow.addChild("td", "style", "color: gray").addChild("#", "NULL");
 
 								}
 							}
+						} catch (IOException e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
 						} finally {
 							rs.close();
 						}
